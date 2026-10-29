@@ -1,6 +1,3 @@
-# Requirements: a Go toolchain, and clang only to rebuild the BPF program.
-#
-#   sudo apt install clang llvm libbpf-dev make golang-go
 BPF2GO_CFLAGS := -O2 -g -Wall -I/usr/include/$(shell uname -m)-linux-gnu
 
 BPF_SRC := bpf/socketrail.bpf.c bpf/generate.go
