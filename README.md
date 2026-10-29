@@ -86,7 +86,7 @@ $ make               # regenerates bpf/ when the BPF source is newer, then build
 
 Commit what that produces. The committed object is what `go build` embeds, what `go install` gets, and what a release ships.
 
-`scripts/smoke.py` loads a build into a cgroup of its own, sends traffic to this host's own address, and checks the records. CI runs it on every change, and it runs the same way on a host:
+`scripts/smoke.py` checks that a build loads, attaches and records what it should. CI runs it on every change, and it runs the same way on a host:
 
 ```
 $ sudo python3 scripts/smoke.py ./socketrail
