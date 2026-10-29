@@ -64,7 +64,7 @@ Only traffic to and from local sockets is seen. Routed and bridged traffic passi
 
 Loopback (`127.0.0.0/8`, `::1`) is not recorded. Traffic to one of the host's own other addresses also goes over loopback, and is recorded twice, once from each socket.
 
-Sockets in another network namespace are recorded with the addresses they see, before any NAT.
+TCP is recorded with the addresses the socket itself sees: a connection to an address this host DNATs is recorded under the address the program connected to, and a socket in another network namespace under the addresses of that namespace, before any NAT. UDP is recorded with the addresses on each packet, so a UDP flow through a DNAT on this host is split across two lines, one with what was sent and one with what was received.
 
 IPv4 fragments after the first, and IPv6 packets with extension headers, carry no ports where this looks and are skipped.
 
