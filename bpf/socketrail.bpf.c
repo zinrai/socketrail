@@ -282,7 +282,62 @@ static __always_inline int parse(struct __sk_buff *skb, enum hook hook, struct f
 	return 0;
 }
 
-static __always_inline int apply_tcp_dir(struct __sk_buff *skb, struct flow_key *k)
+/* Why not read context fields directly: the verifier accepts only each
+ * field's own width, and clang merges neighbouring elements into a u64 load
+ * or splits a memcpy into bytes. */
+#define CTX32(f) (*(volatile __u32 *)&(f))
+
+static __always_inline int is_v4_mapped(const __u32 a[IPV6_ADDR_WORDS])
+{
+	return a[0] == 0 && a[1] == 0 && a[2] == bpf_htonl(V4_MAPPED_PREFIX_WORD);
+}
+
+static __always_inline void set_v4_addrs(struct flow_key *k, __u32 l, __u32 r)
+{
+	k->family = AF_INET;
+	__builtin_memcpy(k->laddr, &l, IPV4_ADDR_LEN);
+	__builtin_memcpy(k->raddr, &r, IPV4_ADDR_LEN);
+}
+
+static __always_inline void set_v6_addrs(struct flow_key *k, const __u32 l[IPV6_ADDR_WORDS],
+					 const __u32 r[IPV6_ADDR_WORDS])
+{
+	/* Why not keep a v4-mapped address as inet6: the connection speaks IPv4
+	 * on the wire, and its records should read like those of an IPv4
+	 * socket. */
+	if (is_v4_mapped(r)) {
+		set_v4_addrs(k, l[V4_MAPPED_ADDR_WORD], r[V4_MAPPED_ADDR_WORD]);
+		return;
+	}
+	k->family = AF_INET6;
+	__builtin_memcpy(k->laddr, l, IPV6_ADDR_LEN);
+	__builtin_memcpy(k->raddr, r, IPV6_ADDR_LEN);
+}
+
+/* Why not keep the addresses and ports from the packet: on egress they are
+ * already past NAT, while sockops and ingress see the socket's own, so one
+ * DNAT'd connection would split across two records. */
+static __always_inline int set_addrs_from_socket(struct flow_key *k, struct bpf_sock *sk)
+{
+	if (sk->family == AF_INET) {
+		set_v4_addrs(k, CTX32(sk->src_ip4), CTX32(sk->dst_ip4));
+	} else if (sk->family == AF_INET6) {
+		__u32 l[IPV6_ADDR_WORDS] = {CTX32(sk->src_ip6[0]), CTX32(sk->src_ip6[1]),
+					    CTX32(sk->src_ip6[2]), CTX32(sk->src_ip6[3])};
+		__u32 r[IPV6_ADDR_WORDS] = {CTX32(sk->dst_ip6[0]), CTX32(sk->dst_ip6[1]),
+					    CTX32(sk->dst_ip6[2]), CTX32(sk->dst_ip6[3])};
+		set_v6_addrs(k, l, r);
+	} else {
+		return -1;
+	}
+	/* Why not ntohs for both: src_port is in host order, dst_port in
+	 * network order. */
+	k->lport = sk->src_port;
+	k->rport = bpf_ntohs(sk->dst_port);
+	return 0;
+}
+
+static __always_inline int tcp_key_from_socket(struct __sk_buff *skb, struct flow_key *k)
 {
 	struct bpf_sock *sk = skb->sk;
 	if (!sk)
@@ -302,6 +357,12 @@ static __always_inline int apply_tcp_dir(struct __sk_buff *skb, struct flow_key 
 		return -1;
 	}
 	k->dir = *dir;
+	if (set_addrs_from_socket(k, sk))
+		return -1;
+	/* Why not rely on the check made on the packet: NAT can make the packet
+	 * and the socket disagree, and sockops decides on the socket's. */
+	if (is_loopback(k))
+		return -1;
 	/* Why not if/else assigning one field or the other: clang folds that
 	 * into an OR on the stack pointer, which the verifier rejects.
 	 * Selecting values keeps it to arithmetic on numbers. */
@@ -322,7 +383,7 @@ static __always_inline void handle(struct __sk_buff *skb, enum hook hook)
 		return;
 	if (is_loopback(&k))
 		return;
-	if (k.proto == IPPROTO_TCP && apply_tcp_dir(skb, &k))
+	if (k.proto == IPPROTO_TCP && tcp_key_from_socket(skb, &k))
 		return;
 
 	struct flow_val more = {};
@@ -347,11 +408,6 @@ int on_ingress(struct __sk_buff *skb)
 {
 	handle(skb, HOOK_INGRESS);
 	return CGROUP_SKB_PASS;
-}
-
-static __always_inline int is_v4_mapped(const __u32 a[IPV6_ADDR_WORDS])
-{
-	return a[0] == 0 && a[1] == 0 && a[2] == bpf_htonl(V4_MAPPED_PREFIX_WORD);
 }
 
 /* Why not infer the direction from the packets: ACTIVE_ and
@@ -386,32 +442,14 @@ int on_sockops(struct bpf_sock_ops *ops)
 	k.proto = IPPROTO_TCP;
 	k.dir = dir;
 
-	/* Why not read context fields directly: the verifier accepts only each
-	 * field's own width, and clang merges neighbouring elements into a u64
-	 * load or splits a memcpy into bytes. */
-#define CTX32(f) (*(volatile __u32 *)&(f))
 	if (ops->family == AF_INET) {
-		__u32 l = CTX32(ops->local_ip4), r = CTX32(ops->remote_ip4);
-		k.family = AF_INET;
-		__builtin_memcpy(k.laddr, &l, IPV4_ADDR_LEN);
-		__builtin_memcpy(k.raddr, &r, IPV4_ADDR_LEN);
+		set_v4_addrs(&k, CTX32(ops->local_ip4), CTX32(ops->remote_ip4));
 	} else if (ops->family == AF_INET6) {
 		__u32 l[IPV6_ADDR_WORDS] = {CTX32(ops->local_ip6[0]), CTX32(ops->local_ip6[1]),
-			      CTX32(ops->local_ip6[2]), CTX32(ops->local_ip6[3])};
+					    CTX32(ops->local_ip6[2]), CTX32(ops->local_ip6[3])};
 		__u32 r[IPV6_ADDR_WORDS] = {CTX32(ops->remote_ip6[0]), CTX32(ops->remote_ip6[1]),
-			      CTX32(ops->remote_ip6[2]), CTX32(ops->remote_ip6[3])};
-		/* Why not keep a v4-mapped address as inet6: its packets are IPv4,
-		 * so the bytes land under an inet key, and the connection count
-		 * must land under the same one. */
-		if (is_v4_mapped(r)) {
-			k.family = AF_INET;
-			__builtin_memcpy(k.laddr, &l[V4_MAPPED_ADDR_WORD], IPV4_ADDR_LEN);
-			__builtin_memcpy(k.raddr, &r[V4_MAPPED_ADDR_WORD], IPV4_ADDR_LEN);
-		} else {
-			k.family = AF_INET6;
-			__builtin_memcpy(k.laddr, l, IPV6_ADDR_LEN);
-			__builtin_memcpy(k.raddr, r, IPV6_ADDR_LEN);
-		}
+					    CTX32(ops->remote_ip6[2]), CTX32(ops->remote_ip6[3])};
+		set_v6_addrs(&k, l, r);
 	} else {
 		return SOCKOPS_OK;
 	}
