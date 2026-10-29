@@ -12,9 +12,9 @@ Description=socketrail - per-interval TCP/UDP peer tally
 After=network-online.target
 Wants=network-online.target
 
-# A stopped recorder should be visible. Repeated restarts surface through
-# systemd's unit state. These belong in [Unit]: systemd ignores them in
-# [Service] and falls back to its own defaults.
+# Why not retry forever: a recorder that keeps failing would never look
+# stopped. Why not under [Service]: systemd ignores these there and falls
+# back to its own defaults.
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
