@@ -13,6 +13,19 @@ One line per peer and service per interval, not per connection or per packet. Th
 
 It never holds the packet path: the programs only count, and when the table of an interval fills up, what is lost is a count, which is reported, never a packet.
 
+## Run
+
+```
+$ sudo ./socketrail
+$ ./socketrail -version
+```
+
+To keep it running, see `examples/socketrail.service`.
+
+`-max-entries` is how many distinct lines one interval can hold. Two tables of that size exist at once, roughly 100 bytes per entry each.
+
+SIGTERM ends the interval in progress early and writes it out.
+
 ## Reading a record
 
 `timestamp` is the end of the interval the record covers.
@@ -44,19 +57,6 @@ It appears only when something happened, carries the number since the previous o
 **`dropped`** counts updates that found the interval's table full. Raise `-max-entries` or shorten `-interval`.
 
 **`untracked`** counts packets on TCP connections established before socketrail started. Which side opened them can no longer be known, so they are not recorded until they reconnect.
-
-## Run
-
-```
-$ sudo ./socketrail
-$ ./socketrail -version
-```
-
-To keep it running, see `examples/socketrail.service`.
-
-`-max-entries` is how many distinct lines one interval can hold. Two tables of that size exist at once, roughly 100 bytes per entry each.
-
-SIGTERM ends the interval in progress early and writes it out.
 
 ## Limits
 
