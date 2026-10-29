@@ -75,14 +75,22 @@ def record(binary, args, traffic):
         stderr=subprocess.PIPE,
         text=True,
     )
-    time.sleep(1.5)
-    if p.poll() is not None:
-        print(p.stderr.read())
-        sys.exit("socketrail exited before any traffic was sent")
-    traffic()
-    time.sleep(0.5)
-    p.send_signal(signal.SIGTERM)
-    out, err = p.communicate(timeout=10)
+    # Why not stop it only on the way that succeeds: a failure in between would
+    # leave it attached and in the cgroup, and removing the cgroup would then
+    # fail and hide the error that caused it.
+    try:
+        time.sleep(1.5)
+        if p.poll() is not None:
+            print(p.stderr.read())
+            sys.exit("socketrail exited before any traffic was sent")
+        traffic()
+        time.sleep(0.5)
+        p.send_signal(signal.SIGTERM)
+        out, err = p.communicate(timeout=10)
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.wait()
     if p.returncode != 0:
         print(err)
         sys.exit(f"socketrail exited with {p.returncode}")
