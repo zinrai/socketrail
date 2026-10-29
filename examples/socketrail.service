@@ -1,0 +1,38 @@
+# /etc/systemd/system/socketrail.service
+#
+#   install -m 0755 socketrail /usr/local/bin/socketrail
+#   cp examples/socketrail.service /etc/systemd/system/
+#   systemctl enable --now socketrail
+#
+# Records go to journald as JSON Lines. To write a file instead, set
+# StandardOutput to append:/var/log/socketrail.json.
+
+[Unit]
+Description=socketrail - per-interval TCP/UDP peer tally
+After=network-online.target
+Wants=network-online.target
+
+# A stopped recorder should be visible. Repeated restarts surface through
+# systemd's unit state. These belong in [Unit]: systemd ignores them in
+# [Service] and falls back to its own defaults.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/socketrail -cgroup /sys/fs/cgroup -interval 1m
+Restart=always
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=socketrail
+
+# Attaching cgroup_skb and sockops programs needs CAP_NET_ADMIN.
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_RESOURCE
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
