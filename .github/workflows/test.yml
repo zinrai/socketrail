@@ -18,6 +18,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Check that the BPF objects were generated from these sources
+        run: sha256sum -c bpf/sources.sha256
+
       - name: Run vet
         run: go vet ./...
 

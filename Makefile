@@ -3,8 +3,12 @@
 #   sudo apt install clang llvm libbpf-dev make golang-go
 BPF2GO_CFLAGS := -O2 -g -Wall -I/usr/include/$(shell uname -m)-linux-gnu
 
-BPF_SRC := bpf/socketrail.bpf.c
+BPF_SRC := bpf/socketrail.bpf.c bpf/generate.go
 BPF_OBJ := bpf/socketrail_bpfel.o
+# Why not have CI regenerate the objects and compare them: another clang or
+# other headers compile the same source to different bytes. A hash of what the
+# objects were generated from says whether they are current without either.
+BPF_SUM := bpf/sources.sha256
 
 all: socketrail
 
@@ -14,12 +18,14 @@ all: socketrail
 socketrail: $(wildcard *.go) $(wildcard bpf/*.go) $(BPF_OBJ)
 	go build -o $@ .
 
-$(BPF_OBJ): $(BPF_SRC) bpf/generate.go
+$(BPF_OBJ): $(BPF_SRC)
 	BPF2GO_CFLAGS="$(BPF2GO_CFLAGS)" go generate ./...
+	sha256sum $(BPF_SRC) > $(BPF_SUM)
 
 # Commit what this produces. It is what lets `go build` work without clang.
 generate:
 	BPF2GO_CFLAGS="$(BPF2GO_CFLAGS)" go generate ./...
+	sha256sum $(BPF_SRC) > $(BPF_SUM)
 
 clean:
 	rm -f socketrail
