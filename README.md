@@ -39,7 +39,7 @@ SIGTERM ends the interval in progress early and writes it out.
 
 `conns` is the number of connections established during the interval. `"conns":0` with bytes means traffic on a connection opened earlier.
 
-**UDP** records have no `dir`, because UDP does not say which side is the client, and keep both ports instead. A client that picks a new source port per request produces a line per port.
+**UDP** records have no `dir`, because UDP does not say which side is the client, and keep both ports instead. A client that picks a new source port per request produces a line per port, and so does the server that answers it: on a busy UDP server, the lines grow with the requests, not with the peers.
 
 `tx_bytes` and `rx_bytes` are IP-layer bytes from this host's point of view, counted from the moment a TCP connection is established.
 
