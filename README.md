@@ -86,6 +86,12 @@ $ make               # regenerates bpf/ when the BPF source is newer, then build
 
 Commit what that produces. The committed object is what `go build` embeds, what `go install` gets, and what a release ships.
 
+`scripts/smoke.py` loads a build into a cgroup of its own, sends traffic to this host's own address, and checks the records. CI runs it on every change, and it runs the same way on a host:
+
+```
+$ sudo python3 scripts/smoke.py ./socketrail
+```
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

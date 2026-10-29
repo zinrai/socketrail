@@ -29,3 +29,23 @@ jobs:
 
       - name: Build
         run: go build .
+
+  # Why not leave loading to the release check on a real host: dependency
+  # updates arrive every week, and the loader, the verifier and the attach
+  # points are what a cilium/ebpf update can break while unit tests pass.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build .
+
+      - name: Load, attach and record
+        run: sudo python3 scripts/smoke.py ./socketrail
