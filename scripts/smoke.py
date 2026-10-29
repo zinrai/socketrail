@@ -68,7 +68,6 @@ def udp_exchange(addr, port):
 
 
 def record(binary, args, traffic):
-    """Run socketrail, generate traffic, stop it with SIGTERM, return records."""
     p = subprocess.Popen(
         [binary, "-cgroup", CGROUP] + args,
         stdout=subprocess.PIPE,
@@ -97,12 +96,16 @@ def record(binary, args, traffic):
     return [json.loads(line) for line in out.splitlines()]
 
 
+def current_cgroup():
+    with open("/proc/self/cgroup") as f:
+        _, path = f.read().strip().split("::", 1)
+    return "/sys/fs/cgroup" + path
+
+
 def main():
     binary = os.path.abspath(sys.argv[1])
     addr = host_address()
-    with open("/proc/self/cgroup") as f:
-        # cgroup v2 has a single line, "0::/path".
-        home = "/sys/fs/cgroup" + f.read().strip().split("::", 1)[1]
+    home = current_cgroup()
     os.makedirs(CGROUP, exist_ok=True)
     with open(os.path.join(CGROUP, "cgroup.procs"), "w") as f:
         f.write(str(os.getpid()))
@@ -115,8 +118,8 @@ def main():
             tcp_exchange(socket.AF_INET6, "::", "::ffff:" + addr, 18081, v6only=False)
             tcp_exchange(socket.AF_INET, "127.0.0.1", "127.0.0.1", 18082)
 
-        # Why -interval 1h: the only interval to close is the one SIGTERM
-        # ends, which also checks that it is written out.
+        # Why not a short interval: the only interval to close should be the
+        # one SIGTERM ends, so that the records also show it is written out.
         rs = record(binary, ["-interval", "1h"], traffic)
 
         def find(**want):
