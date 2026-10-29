@@ -19,7 +19,8 @@ socketrail: $(wildcard *.go) $(wildcard bpf/*.go) $(BPF_OBJ)
 $(BPF_OBJ): $(BPF_SRC)
 	$(GENERATE)
 
-# Commit what this produces. It is what lets `go build` work without clang.
+# Why not leave the objects out of git and generate them at build time:
+# `go build` and `go install` would then need clang on every machine.
 generate:
 	$(GENERATE)
 
