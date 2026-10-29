@@ -86,6 +86,8 @@ $ make               # regenerates bpf/ when the BPF source is newer, then build
 
 Commit what that produces. The committed object is what `go build` embeds, what `go install` gets, and what a release ships.
 
+## Checking a build
+
 `scripts/smoke.py` checks that a build loads, attaches and records what it should. CI runs it on every change, and it runs the same way on a host:
 
 ```
