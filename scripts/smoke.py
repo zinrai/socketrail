@@ -5,6 +5,7 @@ this host's own address, and check the records. Run as root:
     sudo python3 scripts/smoke.py ./socketrail
 """
 
+import contextlib
 import json
 import os
 import signal
@@ -102,14 +103,27 @@ def current_cgroup():
     return "/sys/fs/cgroup" + path
 
 
+def move_to(cgroup):
+    with open(os.path.join(cgroup, "cgroup.procs"), "w") as f:
+        f.write(str(os.getpid()))
+
+
+@contextlib.contextmanager
+def in_cgroup(cgroup):
+    home = current_cgroup()
+    os.makedirs(cgroup, exist_ok=True)
+    try:
+        move_to(cgroup)
+        yield
+    finally:
+        move_to(home)
+        os.rmdir(cgroup)
+
+
 def main():
     binary = os.path.abspath(sys.argv[1])
     addr = host_address()
-    home = current_cgroup()
-    os.makedirs(CGROUP, exist_ok=True)
-    with open(os.path.join(CGROUP, "cgroup.procs"), "w") as f:
-        f.write(str(os.getpid()))
-    try:
+    with in_cgroup(CGROUP):
         ports = {}
 
         def traffic():
@@ -175,10 +189,6 @@ def main():
         check(
             any(r.get("dropped", 0) > 0 for r in rs), "a full table reports dropped", rs
         )
-    finally:
-        with open(os.path.join(home, "cgroup.procs"), "w") as f:
-            f.write(str(os.getpid()))
-        os.rmdir(CGROUP)
 
     if failures:
         sys.exit(f"{len(failures)} check(s) failed")
