@@ -35,6 +35,9 @@ jobs:
   # points are what a cilium/ebpf update can break while unit tests pass.
   smoke:
     runs-on: ubuntu-latest
+    # Why not the default of six hours: a hang in the kernel or in socketrail
+    # would hold the runner that long before anyone saw a failure.
+    timeout-minutes: 5
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

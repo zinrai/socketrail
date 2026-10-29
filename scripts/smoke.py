@@ -16,6 +16,10 @@ import time
 CGROUP = "/sys/fs/cgroup/socketrail-smoke"
 failures = []
 
+# Why not leave sockets blocking: a program that drops packets would leave the
+# exchange waiting forever, and the check would hang instead of failing.
+socket.setdefaulttimeout(5)
+
 
 def check(ok, what, records):
     print(("ok   " if ok else "FAIL ") + what)
