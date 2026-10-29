@@ -6,6 +6,7 @@ BPF_OBJ := bpf/socketrail_bpfel.o
 # other headers compile the same source to different bytes. A hash of what the
 # objects were generated from says whether they are current without either.
 BPF_SUM := bpf/sources.sha256
+GENERATE = BPF2GO_CFLAGS="$(BPF2GO_CFLAGS)" go generate ./... && sha256sum $(BPF_SRC) > $(BPF_SUM)
 
 all: socketrail
 
@@ -16,13 +17,11 @@ socketrail: $(wildcard *.go) $(wildcard bpf/*.go) $(BPF_OBJ)
 	go build -o $@ .
 
 $(BPF_OBJ): $(BPF_SRC)
-	BPF2GO_CFLAGS="$(BPF2GO_CFLAGS)" go generate ./...
-	sha256sum $(BPF_SRC) > $(BPF_SUM)
+	$(GENERATE)
 
 # Commit what this produces. It is what lets `go build` work without clang.
 generate:
-	BPF2GO_CFLAGS="$(BPF2GO_CFLAGS)" go generate ./...
-	sha256sum $(BPF_SRC) > $(BPF_SUM)
+	$(GENERATE)
 
 clean:
 	rm -f socketrail
