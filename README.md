@@ -88,7 +88,7 @@ Commit what that produces. The committed object is what `go build` embeds, what 
 
 ## Checking a build
 
-`scripts/smoke.py` checks that a build loads, attaches and records what it should. CI runs it on every change, and it runs the same way on a host:
+`scripts/smoke.py` checks that a build loads, attaches and records what it should. CI runs it on every change, and it runs the same way on a host. It needs `nft`, and adds an nftables table of its own, `socketrail_smoke`, for the length of the run:
 
 ```
 $ sudo python3 scripts/smoke.py ./socketrail

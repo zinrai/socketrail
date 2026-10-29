@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Load socketrail into a cgroup of its own, send traffic from inside it to
-this host's own address, and check the records. Run as root:
+this host's own address, some of it through a DNAT rule in an nftables table
+of its own, and check the records. Run as root:
 
     sudo python3 scripts/smoke.py ./socketrail
 """
@@ -15,6 +16,8 @@ import sys
 import time
 
 CGROUP = "/sys/fs/cgroup/socketrail-smoke"
+NFT_TABLE = "socketrail_smoke"
+DNAT_PUBLISHED, DNAT_BACKEND = 18084, 18083
 failures = []
 
 # Why not leave sockets blocking: a program that drops packets would leave the
@@ -39,7 +42,9 @@ def host_address():
     return addr
 
 
-def tcp_exchange(family, listen_addr, connect_addr, port, v6only=True):
+def tcp_exchange(
+    family, listen_addr, connect_addr, port, v6only=True, connect_port=None
+):
     srv = socket.socket(family)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if family == socket.AF_INET6:
@@ -47,7 +52,7 @@ def tcp_exchange(family, listen_addr, connect_addr, port, v6only=True):
     srv.bind((listen_addr, port))
     srv.listen()
     c = socket.socket(family)
-    c.connect((connect_addr, port))
+    c.connect((connect_addr, connect_port or port))
     a, _ = srv.accept()
     c.sendall(b"x" * 100)
     a.recv(1000)
@@ -120,10 +125,30 @@ def in_cgroup(cgroup):
         os.rmdir(cgroup)
 
 
+def nft(command):
+    subprocess.run(["nft", command], check=True)
+
+
+# Why not add the rule to a chain the host already has: a table of its own is
+# deleted whole on the way out, and no rule of the host's is touched.
+@contextlib.contextmanager
+def dnat(addr, published, backend):
+    nft(f"add table ip {NFT_TABLE}")
+    try:
+        nft(f"add chain ip {NFT_TABLE} out {{ type nat hook output priority -100 ; }}")
+        nft(
+            f"add rule ip {NFT_TABLE} out ip daddr {addr} tcp dport {published}"
+            f" dnat to {addr}:{backend}"
+        )
+        yield
+    finally:
+        nft(f"delete table ip {NFT_TABLE}")
+
+
 def main():
     binary = os.path.abspath(sys.argv[1])
     addr = host_address()
-    with in_cgroup(CGROUP):
+    with in_cgroup(CGROUP), dnat(addr, DNAT_PUBLISHED, DNAT_BACKEND):
         ports = {}
 
         def traffic():
@@ -131,6 +156,9 @@ def main():
             ports["udp"] = udp_exchange(addr, 15353)
             tcp_exchange(socket.AF_INET6, "::", "::ffff:" + addr, 18081, v6only=False)
             tcp_exchange(socket.AF_INET, "127.0.0.1", "127.0.0.1", 18082)
+            tcp_exchange(
+                socket.AF_INET, addr, addr, DNAT_BACKEND, connect_port=DNAT_PUBLISHED
+            )
 
         # Why not a short interval: the only interval to close should be the
         # one SIGTERM ends, so that the records also show it is written out.
@@ -178,6 +206,20 @@ def main():
         check(
             not find(remote_port=18082) and not find(local_port=18082),
             "loopback is not recorded",
+            rs,
+        )
+        client = find(proto="tcp", dir="out", remote_port=DNAT_PUBLISHED)
+        server = find(proto="tcp", dir="in", local_port=DNAT_BACKEND)
+        check(
+            len(client) == 1
+            and client[0]["tx_bytes"] > 0
+            and client[0]["rx_bytes"] > 0
+            and len(server) == 1
+            and server[0]["tx_bytes"] > 0
+            and server[0]["rx_bytes"] > 0
+            and not find(proto="tcp", dir="out", remote_port=DNAT_BACKEND)
+            and not find(proto="tcp", dir="in", local_port=DNAT_PUBLISHED),
+            "a DNAT'd connection lands on one line on each side",
             rs,
         )
 

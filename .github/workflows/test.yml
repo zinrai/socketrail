@@ -50,5 +50,8 @@ jobs:
       - name: Build
         run: go build .
 
+      - name: Install nft
+        run: command -v nft || (sudo apt-get update && sudo apt-get install -y nftables)
+
       - name: Load, attach and record
         run: sudo python3 scripts/smoke.py ./socketrail
