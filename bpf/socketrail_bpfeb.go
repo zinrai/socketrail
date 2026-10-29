@@ -48,6 +48,20 @@ type SocketrailFlowVal struct {
 	Conns   uint64
 }
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	SocketrailMapCounters   = "counters"
+	SocketrailMapFilling    = "filling"
+	SocketrailMapFlows0     = "flows0"
+	SocketrailMapFlows1     = "flows1"
+	SocketrailMapSkDir      = "sk_dir"
+	SocketrailProgOnEgress  = "on_egress"
+	SocketrailProgOnIngress = "on_ingress"
+	SocketrailProgOnSockops = "on_sockops"
+)
+
 // LoadSocketrail returns the embedded CollectionSpec for Socketrail.
 func LoadSocketrail() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_SocketrailBytes)
@@ -68,7 +82,7 @@ func LoadSocketrail() (*ebpf.CollectionSpec, error) {
 //	*SocketrailMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func LoadSocketrailObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func LoadSocketrailObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := LoadSocketrail()
 	if err != nil {
 		return err
