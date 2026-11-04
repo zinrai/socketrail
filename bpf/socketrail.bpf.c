@@ -226,8 +226,9 @@ static __always_inline __u32 ipv4_header_len(const struct ipv4 *ip)
 	return (ip->vihl & IPV4_IHL_MASK) * IPV4_IHL_WORD_LEN;
 }
 
-/* Why not take the addresses from skb->sk: an unconnected UDP socket has no
- * peer there, and the packet always has both. */
+/* Why not take the addresses from skb->sk here: an unconnected UDP socket has
+ * no peer there, and the packet always has both. TCP replaces them with the
+ * socket's afterwards, in tcp_key_from_socket(). */
 static __always_inline int parse(struct __sk_buff *skb, enum hook hook, struct flow_key *k)
 {
 	__u32 l4off;
