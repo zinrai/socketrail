@@ -318,7 +318,7 @@ static __always_inline void set_v6_addrs(struct flow_key *k, const __u32 l[IPV6_
 /* Why not keep the addresses and ports from the packet: on egress they are
  * already past NAT, while sockops and ingress see the socket's own, so one
  * DNAT'd connection would split across two records. */
-static __always_inline int set_addrs_from_socket(struct flow_key *k, struct bpf_sock *sk)
+static __always_inline int set_endpoints_from_socket(struct flow_key *k, struct bpf_sock *sk)
 {
 	if (sk->family == AF_INET) {
 		set_v4_addrs(k, CTX32(sk->src_ip4), CTX32(sk->dst_ip4));
@@ -358,7 +358,7 @@ static __always_inline int tcp_key_from_socket(struct __sk_buff *skb, struct flo
 		return -1;
 	}
 	k->dir = *dir;
-	if (set_addrs_from_socket(k, sk))
+	if (set_endpoints_from_socket(k, sk))
 		return -1;
 	/* Why not rely on the check made on the packet: NAT can make the packet
 	 * and the socket disagree, and sockops decides on the socket's. */
