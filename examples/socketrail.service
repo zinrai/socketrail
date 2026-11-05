@@ -27,8 +27,9 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=socketrail
 
-# Attaching cgroup_skb and sockops programs needs CAP_NET_ADMIN.
-CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_RESOURCE
+# CAP_BPF creates the maps and loads the programs; CAP_NET_ADMIN lets
+# cgroup_skb and sockops programs load and attach.
+CapabilityBoundingSet=CAP_BPF CAP_NET_ADMIN
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
